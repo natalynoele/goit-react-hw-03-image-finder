@@ -1,12 +1,12 @@
 import React from 'react';
-import { Component } from 'react';
 import PropTypes from 'prop-types';
+import { Component } from 'react';
+import { toast } from 'react-toastify';
 import { ThreeDots } from 'react-loader-spinner';
-import fetchImages from 'services/Api';
-import ImageGalleryItem from 'components/imageGalleryItem/ImageGalleryItem';
 import Button from 'components/button/Button';
 import Modal from 'components/modal/Modal';
-
+import GalleryList from 'components/galleryList/GalleryList';
+import fetchImages from 'services/Api';
 import './Style_ImageGallery.scss';
 
 class ImageGallery extends Component {
@@ -20,12 +20,7 @@ class ImageGallery extends Component {
     items: [],
     page: 1,
     isShowModal: false,
-  };
-
-  galleryEndRef = React.createRef();
-
-  scrollToBottom = () => {
-    this.galleryEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    isLoad: true,
   };
 
   handleLoadMore = () => {
@@ -42,37 +37,45 @@ class ImageGallery extends Component {
   };
 
   componentDidUpdate(prevProps, prevState) {
+    if (this.props.searchText === '') return;
+    const { items } = this.state;
     const prevSearch = prevProps.searchText;
     const nextSearch = this.props.searchText;
     const prevPage = prevState.page;
     const nextPage = this.state.page;
-    const { page } = this.state;
-    if (prevSearch !== nextSearch || prevPage !== nextPage) {
-      if (prevSearch !== nextSearch) {
-        this.setState({ items: [], page: 1, totalPage:0 });
-      }
-      this.setState({ status: 'pending', visible: true });
-      fetchImages(nextSearch, page)
+
+    if (prevSearch !== nextSearch) {
+      this.setState({ items: [], page: 1, isLoad: true });
+    }
+    if (
+      (prevSearch !== nextSearch && nextPage === 1) ||
+      prevPage !== nextPage
+    ) {
+      this.setState({ status: 'pending' });
+      fetchImages(nextSearch, nextPage)
         .then(data => {
-          if (!data.totalHits) {
-            return Promise.reject(
-              new Error(
-                `There are not any images according the request ${nextSearch}`
-              )
-            );
+          if (data.hits.length === 0) {
+              return Promise.reject(
+                new Error(
+                  `There are not any images according to the request ${nextSearch}`
+                )
+              );
           }
           this.setState(prevState => ({
             items: [...prevState.items, ...data.hits],
-            status: 'resolved',           
+            status: 'resolved',
           }));
+          if (items.length > 0 && data.total === data.totalHits) {
+            this.setState({ isLoad: false });
+          }
         })
         .catch(error => this.setState({ error, status: 'rejected' }));
     }
-    this.scrollToBottom();
   }
 
   render() {
     const { items, error, status, isShowModal } = this.state;
+
     if (status === 'idle') {
       return (
         <div className="PageTitle">
@@ -80,7 +83,8 @@ class ImageGallery extends Component {
         </div>
       );
     }
-    if (status === 'pending') {
+
+    if (status === 'pending' && items.length === 0) {
       return (
         <div className="LoaderWrap">
           <ThreeDots
@@ -97,24 +101,39 @@ class ImageGallery extends Component {
       );
     }
 
+    if (status === 'pending' && items.length > 0) {
+      return (
+        <div className="GalleryWrapper">
+          <GalleryList items={items} openModal={this.openModal} />         
+          <div className="LoaderWrap">
+            <ThreeDots
+              height="80"
+              width="80"
+              radius="9"
+              color="#5957d0"
+              ariaLabel="three-dots-loading"
+              wrapperStyle={{}}
+              wrapperClassName="LoaderWrap"
+              visible={true}
+            />
+          </div>
+          <Button click={this.handleLoadMore}>Loading</Button>
+        </div>
+      );
+    }
+
     if (status === 'resolved') {
       return (
         <div className="GalleryWrapper">
-          <ul className="ImageGallery">
-            {items.map(({ id, webformatURL, largeImageURL, tags }) => {
-              return (
-                <ImageGalleryItem
-                  key={id}
-                  url={webformatURL}
-                  alt={tags}
-                  modalUrl={largeImageURL}
-                  clickImg={this.openModal}
-                />
-              );
-            })}
-          </ul>
-          <div ref={this.galleryEndRef} />
-          <Button click={this.handleLoadMore}>Load More</Button>
+          <GalleryList items={items} openModal={this.openModal} />      
+
+          {this.state.isLoad ? (
+            <Button click={this.handleLoadMore}>Load More</Button>
+          ) : (
+            toast.info('You reached the end of the collection') && (
+              <p>You reached the end of the collection</p>
+            )
+          )}
 
           {isShowModal && (
             <Modal image={this.state.selectedImage} close={this.closeModal} />
