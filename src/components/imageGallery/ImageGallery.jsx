@@ -19,7 +19,7 @@ class ImageGallery extends Component {
     status: 'idle',
     error: null,
     items: [],
-    perPage: 50,
+    perPage: 12,
     currentPage: 1,
     isShowModal: false,
     isEndOfCollection: false,
